@@ -1,6 +1,6 @@
 import type { ComponentChildren } from 'preact';
 import { useEffect, useRef } from 'preact/hooks';
-import { latexToHtml, MathfieldElement } from './mathlive';
+import { KbMode, latexToHtml, MathfieldElement, setupKeyboard } from './mathlive';
 
 /** Tekst z fragmentami $...$ renderowanymi jako wzory */
 export function MathText({ text, class: cls }: { text: string; class?: string }) {
@@ -20,7 +20,9 @@ export function MathDisplay({ latex }: { latex: string }) {
 
 export interface MathInputApi { focus(): void; clear(): void; insert(latex: string): void; command(c: string): void }
 
-export function MathInput({ onInput, onEnter, prefix, suffix, disabled, apiRef, autoFocus }: {
+export function MathInput({ onInput, onEnter, prefix, suffix, disabled, apiRef, autoFocus, kb = 'default', initial }: {
+  kb?: KbMode;
+  initial?: string;
   onInput: (latex: string) => void;
   onEnter: () => void;
   prefix?: string;
@@ -31,8 +33,8 @@ export function MathInput({ onInput, onEnter, prefix, suffix, disabled, apiRef, 
 }) {
   const host = useRef<HTMLDivElement>(null);
   const mfRef = useRef<MathfieldElement | null>(null);
-  const cb = useRef({ onInput, onEnter });
-  cb.current = { onInput, onEnter };
+  const cb = useRef({ onInput, onEnter, kb });
+  cb.current = { onInput, onEnter, kb };
 
   useEffect(() => {
     const mf = new MathfieldElement();
@@ -40,6 +42,8 @@ export function MathInput({ onInput, onEnter, prefix, suffix, disabled, apiRef, 
     mf.mathVirtualKeyboardPolicy = 'auto';
     mf.setAttribute('aria-label', 'Twoja odpowiedź');
     mf.addEventListener('input', () => cb.current.onInput(mf.value));
+    mf.addEventListener('focusin', () => setupKeyboard(cb.current.kb));
+    if (initial) mf.value = initial;
     mf.addEventListener('keydown', (e: KeyboardEvent) => {
       if (e.key === 'Enter') { e.preventDefault(); cb.current.onEnter(); }
     }, { capture: true });
@@ -81,10 +85,19 @@ const TOOLS: { label: string; insert?: string; cmd?: string; title: string }[] =
 ];
 
 /** Pasek szybkiego wstawiania (komputer) */
-export function Toolbar({ api }: { api: { current: MathInputApi | null } }) {
+const SET_TOOLS: typeof TOOLS = [
+  { label: '\\infty', insert: '\\infty', title: 'Nieskończoność' },
+  { label: '\\cup', insert: '\\cup', title: 'Suma przedziałów' },
+  { label: '\\langle', insert: '\\langle', title: 'Nawias domknięty (lewy)' },
+  { label: '\\rangle', insert: '\\rangle', title: 'Nawias domknięty (prawy)' },
+  { label: ';', insert: ';', title: 'Średnik (oddziela liczby)' },
+];
+
+export function Toolbar({ api, kb = 'default' }: { api: { current: MathInputApi | null }; kb?: KbMode }) {
+  const tools = kb === 'sets' ? [...SET_TOOLS, ...TOOLS.filter((t) => ['\\frac{a}{b}', '\\sqrt{a}'].includes(t.label))] : TOOLS;
   return (
     <div class="toolbar" role="toolbar" aria-label="Wstaw symbol">
-      {TOOLS.map((t) => (
+      {tools.map((t) => (
         <button key={t.label} type="button" class="tool" title={t.title} aria-label={t.title}
           onPointerDown={(e) => e.preventDefault()}
           onClick={() => api.current?.insert(t.insert!)}

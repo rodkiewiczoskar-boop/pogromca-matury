@@ -7,6 +7,7 @@ import { mulberry32 } from '../math/rng';
 import { loadCE } from '../math/evaluate';
 import { Icon, MathDisplay, MathInput, MathInputApi, MathText, Progress, Toolbar, TopBar } from './components';
 import { latexToHtml } from './mathlive';
+import { CalcButton } from './calculator';
 import { dzialProgress, findSkill, isUnlocked, recordAnswer, skillProgress, testUnlocked, update, useStore } from './store';
 
 const seed = () => (Math.random() * 2 ** 31) | 0;
@@ -30,6 +31,14 @@ export function Home() {
             <span class="stat"><b>{done}</b> z {total} etapów</span>
           </div>
         </section>
+
+        <a class="exam-card" href="#/matura">
+          <span class="exam-card-body">
+            <span class="exam-card-title">Próbna matura</span>
+            <span class="exam-card-meta">34 zadania · 50 punktów · 170 minut{s.exams?.length ? ` · ostatnio ${s.exams[s.exams.length - 1].pct}%` : ''}</span>
+          </span>
+          <Icon name="arrow" />
+        </a>
 
         <h2 class="section-title">Działy</h2>
         <ol class="dzialy">
@@ -140,6 +149,7 @@ function LessonInner({ dzial, skill, index }: { dzial: Dzial; skill: Skill; inde
   const wasDone = useRef(prog.done);
 
   const finished = res && (res.status === 'correct' || res.status === 'wrong');
+  const kb = ['interval', 'point', 'list'].includes(task.answer.form) ? 'sets' : 'default';
 
   useEffect(() => { if (!s.tipsSeen[skill.id]) update((x) => { x.tipsSeen[skill.id] = true; }); }, []);
   useEffect(() => { if (finished) nextBtn.current?.focus(); }, [finished]);
@@ -191,6 +201,7 @@ function LessonInner({ dzial, skill, index }: { dzial: Dzial; skill: Skill; inde
   return (
     <div class="page lesson">
       <TopBar back={`#/d/${dzial.id}`} title={skill.title}>
+        <CalcButton />
         <span class="counter">{Math.min(prog.correct, STAGE_GOAL)}/{STAGE_GOAL}</span>
       </TopBar>
       <div class="lesson-progress"><Progress value={prog.correct / STAGE_GOAL} /></div>
@@ -205,10 +216,10 @@ function LessonInner({ dzial, skill, index }: { dzial: Dzial; skill: Skill; inde
         <section class="task-card">
           <p class="task-text"><MathText text={task.text} /></p>
           {task.display && <MathDisplay latex={task.display} />}
-          <Toolbar api={api} />
-          <MathInput apiRef={api} onInput={(l) => { setLatex(l); if (res && !finished) setRes(null); }} onEnter={check}
+          <Toolbar api={api} kb={kb} />
+          <MathInput apiRef={api} kb={kb} onInput={(l) => { setLatex(l); if (res && !finished) setRes(null); }} onEnter={check}
             prefix={task.answer.prefix} suffix={task.answer.suffix} disabled={!!finished} autoFocus />
-          <p class="hint-line">Skróty: <kbd>/</kbd> ułamek, <kbd>^</kbd> potęga, wpisz <kbd>sqrt</kbd> dla pierwiastka. Przecinek dziesiętny: <kbd>,</kbd></p>
+          <p class="hint-line">{kb === 'sets' ? <>Kilka liczb oddziel średnikiem <kbd>;</kbd>. Przedział: np. <kbd>(</kbd>-∞<kbd>;</kbd>2<kbd>]</kbd>, nieskończoność: wpisz <kbd>infty</kbd>.</> : <>Skróty: <kbd>/</kbd> ułamek, <kbd>^</kbd> potęga, wpisz <kbd>sqrt</kbd> dla pierwiastka. Przecinek dziesiętny: <kbd>,</kbd></>}</p>
         </section>
 
         <div class={feedbackClass} aria-live="polite">
@@ -359,6 +370,7 @@ function TestInner({ d }: { d: Dzial }) {
   return (
     <div class="page lesson">
       <TopBar back={`#/d/${d.id}`} title={`Zadanie ${i + 1} z ${qs.length}`}>
+        <CalcButton />
         <span class="counter">{answeredCount}/{qs.length}</span>
       </TopBar>
       <div class="lesson-progress"><Progress value={(i + 1) / qs.length} /></div>
@@ -383,8 +395,8 @@ function TestInner({ d }: { d: Dzial }) {
             </div>
           ) : (
             <>
-              <Toolbar api={api} />
-              <MathInputSeeded key={`in-${i}`} initial={a.latex ?? ''} apiRef={api} onInput={(l) => setA({ latex: l })}
+              <Toolbar api={api} kb={kbFor(q.task.answer.form)} />
+              <MathInput key={`in-${i}`} initial={a.latex ?? ''} kb={kbFor(q.task.answer.form)} autoFocus apiRef={api} onInput={(l) => setA({ latex: l })}
                 onEnter={() => (i < qs.length - 1 ? setI(i + 1) : undefined)} prefix={q.task.answer.prefix} suffix={q.task.answer.suffix} />
             </>
           )}
@@ -400,12 +412,7 @@ function TestInner({ d }: { d: Dzial }) {
   );
 }
 
-function MathInputSeeded(props: { initial: string; apiRef: { current: MathInputApi | null }; onInput: (l: string) => void; onEnter: () => void; prefix?: string; suffix?: string }) {
-  useEffect(() => {
-    if (props.initial) setTimeout(() => { const mf = document.querySelector('math-field') as any; if (mf) mf.value = props.initial; }, 0);
-  }, []);
-  return <MathInput apiRef={props.apiRef} onInput={props.onInput} onEnter={props.onEnter} prefix={props.prefix} suffix={props.suffix} autoFocus />;
-}
+export const kbFor = (form: string) => (['interval', 'point', 'list'].includes(form) ? 'sets' : 'default') as 'sets' | 'default';
 
 export function NotFound() {
   return (

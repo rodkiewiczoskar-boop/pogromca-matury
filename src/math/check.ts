@@ -1,8 +1,9 @@
 // Sprawdzanie odpowiedzi: równoważność matematyczna + wymagana postać.
 import { Json, MathError, args, evaluate, head, isIntLiteral, isMixedNumber, numLiteral, parseLatex, unwrap } from './evaluate';
 import { gcd, isSquarefree } from './latex';
+import { infiniteBracketProblem, parseIntervals, parseList, parsePoint, sameIntervals, sameMultiset, samePoint } from './sets';
 
-export type Form = 'number' | 'surd' | 'polynomial' | 'factored' | 'power' | 'any';
+export type Form = 'number' | 'surd' | 'polynomial' | 'factored' | 'power' | 'any' | 'list' | 'interval' | 'point';
 
 export interface InputAnswer {
   kind: 'input';
@@ -76,7 +77,7 @@ function isSum(j: Json): boolean {
 function formProblem(j: Json, ans: InputAnswer): string | null {
   const vars = ans.vars ?? [];
   switch (ans.form) {
-    case 'any': return null;
+    case 'any': case 'list': case 'interval': case 'point': return null;
     case 'number':
       return isRationalLiteral(j) ? null : 'Podaj wynik jako jedną liczbę (całkowitą, dziesiętną albo ułamek), bez działań do wykonania.';
     case 'power': {
@@ -179,7 +180,28 @@ function softNote(j: Json, ans: InputAnswer): string | undefined {
 }
 function containsSqrt(j: Json): boolean { let f = false; walk(j, (n) => { if (head(n) === 'Sqrt' || head(n) === 'Root') f = true; }); return f; }
 
+function checkSet(studentLatex: string, ans: InputAnswer): CheckResult {
+  if (/\\placeholder/.test(studentLatex)) return { status: 'invalid', message: 'Uzupełnij puste pola w odpowiedzi.' };
+  if (!studentLatex.trim()) return { status: 'invalid', message: 'Wpisz odpowiedź.' };
+  try {
+    if (ans.form === 'point') return samePoint(parsePoint(studentLatex), parsePoint(ans.expected)) ? { status: 'correct' } : { status: 'wrong' };
+    if (ans.form === 'list') {
+      const got = parseList(studentLatex), exp = parseList(ans.expected);
+      if (sameMultiset(got, exp)) return { status: 'correct' };
+      if (got.length < exp.length && got.every((g) => exp.some((e) => Math.abs(e - g) < 1e-9))) return { status: 'wrong', message: 'Brakuje części rozwiązań.' };
+      return { status: 'wrong' };
+    }
+    const got = parseIntervals(studentLatex), exp = parseIntervals(ans.expected);
+    if (!sameIntervals(got, exp)) return { status: 'wrong' };
+    if (infiniteBracketProblem(got)) return { status: 'form', message: 'Zbiór się zgadza, ale przy nieskończoności stawiamy zawsze nawias okrągły.' };
+    return { status: 'correct' };
+  } catch (err) {
+    return { status: 'invalid', message: err instanceof MathError ? err.message : 'Nie rozumiem tego zapisu.' };
+  }
+}
+
 export function checkAnswer(studentLatex: string, ans: InputAnswer): CheckResult {
+  if (ans.form === 'list' || ans.form === 'interval' || ans.form === 'point') return checkSet(studentLatex, ans);
   let s: Json, e: Json;
   try {
     s = parseLatex(studentLatex);
@@ -187,8 +209,9 @@ export function checkAnswer(studentLatex: string, ans: InputAnswer): CheckResult
     return { status: 'invalid', message: err instanceof MathError ? err.message : 'Nie rozumiem tego zapisu.' };
   }
   e = parseLatex(ans.expected);
-  // "x = 5" → 5
-  if (head(s) === 'Equal' && typeof args(s)[0] === 'string' && !(ans.vars ?? []).length) s = args(s)[1];
+  // "x = 5" → 5, "y = 2x + 1" → 2x + 1 (równanie prostej)
+  if (head(s) === 'Equal' && typeof args(s)[0] === 'string' && !(ans.vars ?? []).includes(args(s)[0] as string)) s = args(s)[1];
+  if (head(e) === 'Equal' && typeof args(e)[0] === 'string') e = args(e)[1];
   let eq: boolean;
   try {
     eq = equivalent(s, e, ans.vars);

@@ -13,6 +13,16 @@ export interface Task {
   verify: { expr: string; vars?: string[] };
   /** Typowe błędne odpowiedzi (do zadań zamkniętych A–D) */
   distractors: string[];
+  /** Dodatkowa weryfikacja w testach: wartość liczona brutalną siłą (np. zliczaniem) */
+  verifyFn?: () => number;
+  /** Oczekiwany wynik verifyFn (domyślnie: wartość odpowiedzi) */
+  verifyFnExpect?: number;
+  /** Lista: każde rozwiązanie zeruje verify.expr */
+  verifyRoots?: boolean;
+  /** Przedział: zbiór rozwiązań nierówności verify.expr (rel) 0 */
+  verifyIneq?: '<' | '<=' | '>' | '>=';
+  /** Punkt: oczekiwane współrzędne */
+  verifyPoint?: number[];
   /** Uzupełniane w teście z działu */
   skillId?: string;
 }
@@ -22,6 +32,8 @@ export interface Skill {
   title: string;
   /** Krótka ściąga: 1–3 linijki */
   tip: string[];
+  /** Nie nadaje się na zadanie zamknięte A–D */
+  noChoice?: boolean;
   generate(r: Rng): Task;
 }
 

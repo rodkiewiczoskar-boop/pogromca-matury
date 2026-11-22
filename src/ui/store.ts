@@ -10,6 +10,7 @@ export interface State {
   tests: Record<string, TestResult>;
   tipsSeen: Record<string, boolean>;
   freeMode: boolean;
+  exams?: { date: string; points: number; max: number; pct: number }[];
 }
 
 const KEY = 'pogromca-matury:v1';
