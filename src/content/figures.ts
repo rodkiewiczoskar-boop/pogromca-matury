@@ -18,6 +18,8 @@ export interface GraphFigure {
   label?: string;
   /** Uczeń może zaznaczyć punkt kratowy kliknięciem */
   pick?: boolean;
+  /** Zaznaczone kąty: łuk w punkcie `at` od kierunku `from` do `to` (stopnie, przeciwnie do wskazówek zegara) */
+  arcs?: { at: Pt; from: number; to: number; label?: string }[];
 }
 
 export type GeoShape =

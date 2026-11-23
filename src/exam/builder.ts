@@ -1,6 +1,6 @@
 // Arkusz próbnej matury: układ jak w arkuszach CKE (formuła 2015, poziom podstawowy).
 import { DZIALY } from '../content/curriculum';
-import { makeChoice, ChoiceQuestion } from '../content/testBuilder';
+import { genTask, makeChoice, newSeed, ChoiceQuestion } from '../content/testBuilder';
 import type { Skill } from '../content/types';
 import { mulberry32, pick } from '../math/rng';
 import { OPEN_BLUEPRINT, OpenTask } from './open';
@@ -30,7 +30,7 @@ export function buildExam(seed: number): ExamItem[] {
     let task;
     for (let tries = 0; tries < 20; tries++) {
       const sk = skillById.get(pick(r, ids))!;
-      task = { ...sk.generate(r), skillId: sk.id };
+      task = genTask(sk, newSeed(r));
       const key = task.text + (task.display ?? '');
       if (!seen.has(key)) { seen.add(key); break; }
     }

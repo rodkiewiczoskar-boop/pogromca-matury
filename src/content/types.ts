@@ -9,6 +9,8 @@ export interface Task {
   display?: string;
   /** Rysunek (wykres funkcji albo figura) */
   figure?: Figure;
+  /** Dalsza część polecenia pod rysunkiem */
+  after?: string;
   answer: InputAnswer;
   /** Kolejne kroki rozwiązania ($...$ to wzory) */
   solution: string[];
@@ -28,8 +30,9 @@ export interface Task {
   verifyPoint?: number[];
   /** Przedział: przynależność liczby do zbioru liczona niezależnie (np. próbkowaniem wykresu) */
   verifyIn?: (x: number) => boolean;
-  /** Uzupełniane w teście z działu */
+  /** Uzupełniane przy losowaniu (genTask): etap i ziarno, z którego da się odtworzyć zadanie */
   skillId?: string;
+  seed?: number;
 }
 
 export interface Skill {

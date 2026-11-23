@@ -65,8 +65,10 @@ export function CalcButton() {
   // dotknięcie pola odpowiedzi zamyka kalkulator (wraca klawiatura matematyczna)
   useEffect(() => {
     const f = () => setOpen(false);
+    const other = (e: Event) => { if ((e as CustomEvent).detail !== 'calc') setOpen(false); };
     fieldEvents.addEventListener('field-focus', f);
-    return () => fieldEvents.removeEventListener('field-focus', f);
+    fieldEvents.addEventListener('panel-open', other);
+    return () => { fieldEvents.removeEventListener('field-focus', f); fieldEvents.removeEventListener('panel-open', other); };
   }, []);
   // przy otwartym kalkulatorze przewijamy tak, żeby pole odpowiedzi było widać nad nim
   useEffect(() => {
@@ -86,12 +88,13 @@ export function CalcButton() {
       // najpierw chowamy klawiaturę matematyczną i zdejmujemy fokus z pola
       window.mathVirtualKeyboard?.hide();
       (document.activeElement as HTMLElement | null)?.blur?.();
+      fieldEvents.dispatchEvent(new CustomEvent('panel-open', { detail: 'calc' }));
     }
     setOpen(!open);
   };
   return (
     <>
-      <button class="calc-fab" type="button" onPointerDown={(e) => e.preventDefault()} onClick={toggle} aria-expanded={open}>
+      <button class="calc-fab" type="button" onPointerDown={(e) => e.preventDefault()} onClick={toggle} aria-expanded={open} aria-label="Kalkulator">
         <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2" /><path d="M8.5 7.5h7M8.5 12h1M12 12h0M15.5 12h0M8.5 15.5h1M12 15.5h0M15.5 15.5h0" /></svg>
         <span>Kalkulator</span>
       </button>

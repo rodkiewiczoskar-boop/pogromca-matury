@@ -3,7 +3,7 @@ import { Json, MathError, args, evaluate, head, isIntLiteral, isMixedNumber, num
 import { gcd, isSquarefree } from './latex';
 import { infiniteBracketProblem, parseIntervals, parseList, parsePoint, sameIntervals, sameMultiset, samePoint } from './sets';
 
-export type Form = 'number' | 'surd' | 'polynomial' | 'factored' | 'power' | 'any' | 'list' | 'interval' | 'point';
+export type Form = 'number' | 'surd' | 'polynomial' | 'factored' | 'power' | 'any' | 'list' | 'interval' | 'point' | 'equation';
 
 export interface InputAnswer {
   kind: 'input';
@@ -77,7 +77,7 @@ function isSum(j: Json): boolean {
 function formProblem(j: Json, ans: InputAnswer): string | null {
   const vars = ans.vars ?? [];
   switch (ans.form) {
-    case 'any': case 'list': case 'interval': case 'point': return null;
+    case 'any': case 'list': case 'interval': case 'point': case 'equation': return null;
     case 'number':
       return isRationalLiteral(j) ? null : 'Podaj wynik jako jedną liczbę (całkowitą, dziesiętną albo ułamek), bez działań do wykonania.';
     case 'power': {
@@ -218,7 +218,42 @@ export function splitChain(latex: string): string[] {
 const isBareSymbol = (seg: string) => /^[a-zA-Z](_\{?\w+\}?)?$/.test(seg.trim());
 
 /** Sprawdza odpowiedź. Można rozpisać obliczenia: wynikiem jest część po ostatnim "=", a kroki muszą być sobie równe. */
+/**
+ * Równanie (np. warunek zadania): poprawne, gdy jest równoważne oczekiwanemu przez pomnożenie stronami,
+ * czyli L−P ucznia jest stałą (≠0) wielokrotnością L−P oczekiwanego we wszystkich punktach próbnych.
+ */
+export function checkEquation(studentLatex: string, ans: InputAnswer): CheckResult {
+  const sides = (l: string): [Json, Json] | null => {
+    const segs = splitChain(l);
+    if (segs.length !== 2 || !segs[0] || !segs[1]) return null;
+    return [parseLatex(segs[0]), parseLatex(segs[1])];
+  };
+  let st: [Json, Json] | null, ex: [Json, Json] | null;
+  try { st = sides(studentLatex); } catch (e) { return { status: 'invalid', message: e instanceof MathError ? e.message : 'Nie rozumiem tego zapisu.' }; }
+  if (!st) return { status: 'invalid', message: 'Zapisz równanie: lewa strona = prawa strona (jeden znak „=”).' };
+  ex = sides(ans.expected)!;
+  const vars = ans.vars ?? ['x'];
+  let ratio: number | null = null, anyNonZero = false;
+  for (let i = 0; i < SAMPLE_POINTS.length; i++) {
+    const env: Record<string, number> = {};
+    vars.forEach((v, k) => (env[v] = SAMPLE_POINTS[(i + k * 2) % SAMPLE_POINTS.length] + k * 0.071));
+    let ds: number, de: number;
+    try { ds = evaluate(st[0], env) - evaluate(st[1], env); } catch { return { status: 'invalid', message: 'Nie da się obliczyć tego równania.' }; }
+    de = evaluate(ex[0], env) - evaluate(ex[1], env);
+    if (!Number.isFinite(ds)) return { status: 'wrong' };
+    const scale = Math.max(1, Math.abs(de), Math.abs(ds));
+    if (Math.abs(de) < 1e-9 * scale) { if (Math.abs(ds) > 1e-9 * scale) return { status: 'wrong' }; continue; }
+    if (Math.abs(ds) > 1e-12) anyNonZero = true;
+    const r = ds / de;
+    if (ratio === null) ratio = r;
+    else if (Math.abs(r - ratio) > 1e-9 * Math.max(1, Math.abs(ratio))) return { status: 'wrong' };
+  }
+  if (!anyNonZero || ratio === null || Math.abs(ratio) < 1e-12) return { status: 'wrong', message: 'To równanie nic nie mówi o niewiadomej.' };
+  return { status: 'correct' };
+}
+
 export function checkAnswer(studentLatex: string, ans: InputAnswer): CheckResult {
+  if (ans.form === 'equation') return checkEquation(studentLatex, ans);
   if (ans.form === 'list') return checkSet(studentLatex, ans);
   const segs = splitChain(studentLatex);
   if (segs.length > 1) {

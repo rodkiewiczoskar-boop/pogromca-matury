@@ -1,5 +1,6 @@
 // Zadania otwarte próbnej matury (2, 4 i 5 punktów) z schematem punktowania wzorowanym na kluczach CKE.
 import type { InputAnswer } from '../math/check';
+import type { Figure } from '../content/figures';
 import { linTex, p, polyTex, q, Q, simplifySqrt, surdTex } from '../math/latex';
 import { int, intNZ, pick, Rng } from '../math/rng';
 import { dzial3 } from '../content/dzialy3';
@@ -12,7 +13,12 @@ export interface OpenPart {
   verifyFnExpect?: number;
   verifyRoots?: boolean;
   verifyIneq?: '<' | '<=' | '>' | '>=';
+  verifyPoint?: number[];
+  /** Punkty częściowe za tę część, gdy nie wszystkie części są dobrze */
+  pts?: number;
 }
+/** Krok pośredni (nieobowiązkowy): dobry wynik kroku daje punkty częściowe wg schematu */
+export interface OpenStep extends OpenPart { title: string; pts: number }
 export interface SchemeLevel { pts: number; desc: string }
 export interface OpenTask {
   id: string;
@@ -23,6 +29,24 @@ export interface OpenTask {
   parts: OpenPart[];
   scheme: SchemeLevel[];
   solution: string[];
+  steps?: OpenStep[];
+  figure?: Figure;
+  /** Dalsza część polecenia (pod rysunkiem lub tabelą) */
+  after?: string;
+  /** Tabela pod treścią: pierwszy wiersz to nagłówki */
+  table?: string[][];
+  /** Własna reguła punktów częściowych (gdy nie wszystkie części są dobrze) */
+  score?: (stepOk: boolean[], partOk: boolean[]) => number;
+}
+
+/** Punkty z automatu: pełne za dobre wszystkie części, inaczej najwyższy poziom potwierdzony krokami */
+export function scoreOpen(t: OpenTask, stepOk: boolean[], partOk: boolean[]): number {
+  if (t.parts.length && t.parts.every((_, i) => partOk[i])) return t.points;
+  if (t.score) return Math.min(t.points - 1, t.score(stepOk, partOk));
+  let m = 0;
+  (t.steps ?? []).forEach((st, i) => { if (stepOk[i]) m = Math.max(m, st.pts); });
+  t.parts.forEach((p, i) => { if (partOk[i] && p.pts) m = Math.max(m, p.pts); });
+  return Math.min(m, t.points - 1);
 }
 
 const TRIPLES: [number, number, number][] = [[3, 4, 5], [6, 8, 10], [5, 12, 13], [8, 15, 17], [9, 12, 15], [12, 16, 20], [7, 24, 25]];
@@ -37,6 +61,7 @@ export function openNierownosc(r: Rng): OpenTask {
   return {
     id: 'o-nier', points: 2, text: 'Rozwiąż nierówność. Wynik zapisz jako przedział lub sumę przedziałów.', display: t.display,
     parts: [{ answer: t.answer, verify: t.verify, verifyIneq: t.verifyIneq }],
+    steps: zeros ? [{ title: 'Miejsca zerowe trójmianu', pts: 1, label: 'x \\in \\{', answer: { kind: 'input', expected: `${zeros[1]}; ${zeros[2]}`, form: 'list', suffix: '\\}' }, verify: { expr: t.verify.expr, vars: ['x'] }, verifyRoots: true }] : [],
     scheme: [
       { pts: 1, desc: `Obliczenie lub podanie pierwiastków trójmianu: $x_1 = ${zeros?.[1]}$, $x_2 = ${zeros?.[2]}$ (albo zaznaczenie ich na osi i szkic paraboli).` },
       { pts: 2, desc: `Podanie zbioru rozwiązań: $${t.answer.expected}$.` },
@@ -56,6 +81,7 @@ export function openRownanie(r: Rng): OpenTask {
   return {
     id: 'o-rown', points: 2, text: 'Rozwiąż równanie. Wszystkie rozwiązania oddziel średnikiem.', display,
     parts: [{ label: 'x \\in \\{', answer: { kind: 'input', expected: roots.join('; '), form: 'list', suffix: '\\}' }, verify: { expr: polyTex(co), vars: ['x'] }, verifyRoots: true }],
+    steps: [{ title: 'Lewa strona zapisana jako iloczyn', pts: 1, answer: { kind: 'input', expected: `\\left(${linTex(1, a)}\\right)\\left(x^2 - ${b * b}\\right)`, form: 'factored', vars: ['x'] }, verify: { expr: polyTex(co), vars: ['x'] } }],
     scheme: [
       { pts: 1, desc: `Zapisanie lewej strony w postaci iloczynu, np. $\\left(${linTex(1, a)}\\right)\\left(x^2 - ${b * b}\\right)$ albo $\\left(${linTex(1, a)}\\right)(x-${b})(x+${b})$.` },
       { pts: 2, desc: `Podanie wszystkich rozwiązań: $x = ${-a}$, $x = ${b}$, $x = ${-b}$.` },
@@ -126,6 +152,7 @@ export function openCiag(r: Rng): OpenTask {
   return {
     id: 'o-ciag', points: 2,
     text: `Liczby $${A}$, $${B}$, $${C}$ (w podanej kolejności) są pierwszym, drugim i trzecim wyrazem ciągu arytmetycznego. Oblicz $x$.`,
+    steps: [{ title: 'Warunek na ciąg arytmetyczny (równanie z niewiadomą x)', pts: 1, answer: { kind: 'input', expected: `2\\left(${B}\\right) = ${A} + ${C}`, form: 'equation', vars: ['x'] }, verify: { expr: `${x}` } }],
     parts: [{ label: 'x =', answer: num(`${x}`), verify: { expr: `\\frac{${2 * s - q1 - u}}{${t}}` }, verifyFn: () => { const a = 2 * rr * x * x + q1, b = rr * x * x + s, c = t * x + u; return 2 * b - a - c === 0 ? x : NaN; } }],
     scheme: [
       { pts: 1, desc: `Zapisanie warunku na ciąg arytmetyczny: $2\\left(${B}\\right) = ${A} + ${C}$.` },
@@ -144,6 +171,10 @@ export function openPrawd(r: Rng): OpenTask {
   return {
     id: 'o-prawd', points: 2,
     text: `W pierwszym pudełku są kule z numerami od $1$ do $${m}$, a w drugim od $1$ do $${n}$. Losujemy po jednej kuli z każdego pudełka i tworzymy liczbę dwucyfrową: numer z pierwszego pudełka to cyfra dziesiątek, a z drugiego cyfra jedności. Oblicz prawdopodobieństwo, że otrzymana liczba jest podzielna przez $${k}$.`,
+    steps: [
+      { title: 'Liczba wszystkich zdarzeń', pts: 1, label: '|\\Omega| =', answer: num(`${m * n}`), verify: { expr: `${m}\\cdot ${n}` }, verifyFn: () => { let c = 0; for (let a = 1; a <= m; a++) for (let b = 1; b <= n; b++) c++; return c; } },
+      { title: 'Liczba zdarzeń sprzyjających', pts: 1, label: '|A| =', answer: num(`${fav}`), verify: { expr: `${fav}` }, verifyFn: () => { let c = 0; for (let a = 1; a <= m; a++) for (let b = 1; b <= n; b++) if ((10 * a + b) % k === 0) c++; return c; } },
+    ],
     parts: [{ label: 'P =', answer: num(P.tex()), verify: { expr: `\\frac{${fav}}{${m * n}}` }, verifyFn: () => { let c = 0; for (let a = 1; a <= m; a++) for (let b = 1; b <= n; b++) if ((10 * a + b) % k === 0) c++; return c / (m * n); } }],
     scheme: [
       { pts: 1, desc: `Obliczenie $|\\Omega| = ${m}\\cdot ${n} = ${m * n}$ albo wypisanie zdarzeń sprzyjających: $${favList.join(', ')}$ (jest ich $${fav}$).` },
@@ -160,6 +191,7 @@ export function openGeometria2(r: Rng): OpenTask {
     return {
       id: 'o-plan', points: 2,
       text: `Przyprostokątne trójkąta prostokątnego mają długości $${a}$ i $${b}$. Oblicz wysokość tego trójkąta poprowadzoną na przeciwprostokątną.`,
+      steps: [{ title: 'Długość przeciwprostokątnej', pts: 1, label: 'c =', answer: num(`${c}`), verify: { expr: `\\sqrt{${a}^2+${b}^2}` } }],
       parts: [{ label: 'h =', answer: num(h.tex()), verify: { expr: `\\frac{${a}\\cdot ${b}}{\\sqrt{${a}^2+${b}^2}}` } }],
       scheme: [
         { pts: 1, desc: `Obliczenie długości przeciwprostokątnej $c = ${c}$ albo zapisanie pola na dwa sposoby: $\\frac12\\cdot ${a}\\cdot ${b} = \\frac12\\cdot c\\cdot h$.` },
@@ -206,9 +238,15 @@ export function openSymetralna(r: Rng): OpenTask {
     parts: [{ answer: { kind: 'input', expected: ans, form: 'polynomial', vars: ['x'] }, verify: { expr: `${k.tex()}x + ${b.texP()}`, vars: ['x'] },
       verifyFn: () => { // punkt symetralnej jest równoodległy od A i B
         const x = 1.37, y = k.value * x + b.value; return Math.hypot(x - xa, y - ya) - Math.hypot(x - xb, y - yb); }, verifyFnExpect: 0 }],
+    steps: [
+      { title: 'Środek odcinka AB', pts: 1, label: 'S =', answer: { kind: 'input', expected: `\\left(${S[0]}; ${S[1]}\\right)`, form: 'point' }, verify: { expr: '0' }, verifyPoint: S },
+      { title: 'Współczynnik kierunkowy prostej AB', pts: 1, label: 'a_{AB} =', answer: num(m.tex()), verify: { expr: `\\frac{${yb}-(${ya})}{${xb}-(${xa})}` } },
+      { title: 'Współczynnik kierunkowy symetralnej', pts: 3, label: 'a =', answer: num(k.tex()), verify: { expr: `-\\frac{${xb}-(${xa})}{${yb}-(${ya})}` } },
+    ],
+    score: ([sOk, abOk, kOk]) => (kOk ? 3 : sOk && abOk ? 2 : sOk || abOk ? 1 : 0),
     scheme: [
-      { pts: 1, desc: `Obliczenie współrzędnych środka odcinka: $S = (${S[0]}; ${S[1]})$.` },
-      { pts: 2, desc: `Obliczenie współczynnika kierunkowego prostej $AB$: $a_{AB} = ${m.tex()}$ (i środek $S$).` },
+      { pts: 1, desc: `Obliczenie współrzędnych środka odcinka $S = (${S[0]}; ${S[1]})$ albo współczynnika kierunkowego prostej $AB$: $a_{AB} = ${m.tex()}$.` },
+      { pts: 2, desc: `Obliczenie obu: $S = (${S[0]}; ${S[1]})$ i $a_{AB} = ${m.tex()}$.` },
       { pts: 3, desc: `Wyznaczenie współczynnika kierunkowego symetralnej: $a = ${k.tex()}$ (prostopadła do $AB$, przez $S$).` },
       { pts: 4, desc: `Podanie równania symetralnej: $${ans}$.` },
     ],
@@ -232,6 +270,10 @@ export function openStereo(r: Rng): OpenTask {
   return {
     id: 'o-stereo', points: 4,
     text: `Podstawą ostrosłupa prawidłowego czworokątnego jest kwadrat o boku $${a}$. Krawędź boczna tworzy z płaszczyzną podstawy kąt $${ang}^\\circ$. Oblicz objętość tego ostrosłupa.`,
+    steps: [
+      { title: 'Połowa przekątnej podstawy', pts: 1, label: '\\frac{d}{2} =', answer: { kind: 'input', expected: surdTex(q(0), half, 2), form: 'surd' }, verify: { expr: `\\frac{\\sqrt{${a}^2+${a}^2}}{2}` } },
+      { title: 'Wysokość ostrosłupa', pts: 3, label: 'H =', answer: { kind: 'input', expected: Htex, form: 'surd' }, verify: { expr: `\\frac{${a}\\sqrt{2}}{2}\\tan\\left(${rad[ang]}\\right)` } },
+    ],
     parts: [{ label: 'V =', answer: { kind: 'input', expected: Vtex, form: 'surd' }, verify: { expr: `\\frac{1}{3}\\cdot ${a}^2\\cdot\\frac{${a}\\sqrt{2}}{2}\\tan\\left(${rad[ang]}\\right)` } }],
     scheme: [
       { pts: 1, desc: `Obliczenie przekątnej podstawy $${a}\\sqrt{2}$ lub jej połowy $${surdTex(q(0), half, 2)}$.` },
@@ -255,9 +297,10 @@ export function openKwadratowa(r: Rng): OpenTask {
   const pp = (x1 + x2) / 2;
   return {
     id: 'o-kwadr', points: 5,
+    steps: [{ title: 'Pierwsza współrzędna wierzchołka paraboli', pts: 2, label: 'p =', answer: num(`${pp}`), verify: { expr: `\\frac{${x1}+${x2}}{2}` } }],
     text: `Funkcja kwadratowa $f(x) = ax^2 + bx + c$ przyjmuje wartości dodatnie wtedy i tylko wtedy, gdy $x \\in (${x1}; ${x2})$. Największa wartość funkcji $f$ jest równa $${M.tex()}$. Oblicz współczynniki $a$, $b$ i $c$.`,
     parts: [
-      { label: 'a =', answer: num(a.tex()), verify: { expr: `-\\frac{${M.tex()}}{${h}^2}` } },
+      { label: 'a =', pts: 4, answer: num(a.tex()), verify: { expr: `-\\frac{${M.tex()}}{${h}^2}` } },
       { label: 'b =', answer: num(b.tex()), verify: { expr: `\\frac{${M.tex()}}{${h}^2}\\cdot(${x1}+${x2})` } },
       { label: 'c =', answer: num(c.tex()), verify: { expr: `-\\frac{${M.tex()}}{${h}^2}\\cdot(${x1})\\cdot(${x2})` },
         verifyFn: () => { const f = (x: number) => a.value * x * x + b.value * x + c.value; return Math.abs(f(x1)) + Math.abs(f(x2)) + Math.abs(f(pp) - M.value) < 1e-9 ? c.value : NaN; } },
@@ -280,3 +323,16 @@ export function openKwadratowa(r: Rng): OpenTask {
 
 export const OPEN_BLUEPRINT: ((r: Rng) => OpenTask)[] = [openNierownosc, openRownanie, openDowod, openCiag, openGeometria2, openPrawd, openSymetralna, openStereo, openKwadratowa];
 
+
+/** Etapy, z których korzysta każde zadanie otwarte arkusza (do przewidywania wyniku) */
+export const OPEN_SKILLS: { id: string; points: number; skills: string[] }[] = [
+  { id: 'o-nier', points: 2, skills: ['nier-kwadr'] },
+  { id: 'o-rown', points: 2, skills: ['rozklad', 'rown-kwadr'] },
+  { id: 'o-dowod', points: 2, skills: ['wzory-skr', 'upraszczanie'] },
+  { id: 'o-ciag', points: 2, skills: ['ciag-arytm'] },
+  { id: 'o-plan', points: 2, skills: ['trojkaty', 'tryg-sin-cos'] },
+  { id: 'o-prawd', points: 2, skills: ['prawdopodobienstwo', 'kombinatoryka'] },
+  { id: 'o-anal', points: 4, skills: ['proste', 'odcinki'] },
+  { id: 'o-stereo', points: 4, skills: ['graniastoslupy', 'tryg-wartosci'] },
+  { id: 'o-kwadr', points: 5, skills: ['f-kwadratowa', 'parabola-wykres'] },
+];

@@ -54,6 +54,17 @@ function Graph({ fig, picked, onPick }: { fig: GraphFigure; picked?: Pt | null; 
             })}
           </g>
         ))}
+        {fig.arcs?.map((a, i) => {
+          const r = 0.55 * U, cx = X(a.at[0]), cy = Y(a.at[1]);
+          const t1 = (a.from * Math.PI) / 180, t2 = (a.to * Math.PI) / 180, mid = (t1 + t2) / 2;
+          const p1 = [cx + r * Math.cos(t1), cy - r * Math.sin(t1)], p2 = [cx + r * Math.cos(t2), cy - r * Math.sin(t2)];
+          return (
+            <g key={`arc${i}`}>
+              <path d={`M${cx} ${cy} L${p1[0]} ${p1[1]} A ${r} ${r} 0 ${a.to - a.from > 180 ? 1 : 0} 0 ${p2[0]} ${p2[1]} Z`} class="g-arc" />
+              {a.label && <text x={cx + 0.33 * U * Math.cos(mid)} y={cy - 0.33 * U * Math.sin(mid) + 4} class="g-label" text-anchor="middle">{a.label}</text>}
+            </g>
+          );
+        })}
         {fig.label && <text x={W - 8} y={22} class="g-label" text-anchor="end">{fig.label}</text>}
         {picked && <g><circle cx={X(picked[0])} cy={Y(picked[1])} r={9} class="g-pick" /><circle cx={X(picked[0])} cy={Y(picked[1])} r={3} class="g-pick-dot" /></g>}
       </svg>

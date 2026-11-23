@@ -14,6 +14,17 @@ export function MathText({ text, class: cls }: { text: string; class?: string })
   );
 }
 
+/** Odpowiedź ABCD: LaTeX z wstawkami \\text{…} renderujemy jako zwykły tekst, żeby długie zdania się zawijały */
+export function OptionMath({ latex }: { latex: string }) {
+  if (!latex.includes('\\text{')) return <span class="m" dangerouslySetInnerHTML={{ __html: latexToHtml(latex) }} />;
+  const parts = latex.split(/\\text\{([^}]*)\}/g);
+  return (
+    <span class="opt-text">
+      {parts.map((p, i) => (i % 2 ? <span key={i}>{p}</span> : p.trim() ? <span key={i} class="m" dangerouslySetInnerHTML={{ __html: latexToHtml(p.trim()) }} /> : null))}
+    </span>
+  );
+}
+
 export function MathDisplay({ latex }: { latex: string }) {
   return <div class="display" dangerouslySetInnerHTML={{ __html: latexToHtml(latex, true) }} />;
 }

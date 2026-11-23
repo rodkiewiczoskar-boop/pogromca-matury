@@ -1,7 +1,7 @@
 import { checkAnswer, InputAnswer } from '../math/check';
 import { evaluate, parseLatex } from '../math/evaluate';
-import { Rng, shuffle } from '../math/rng';
-import type { Dzial, Task } from './types';
+import { mulberry32, Rng, shuffle } from '../math/rng';
+import type { Dzial, Skill, Task } from './types';
 
 export interface ChoiceQuestion { kind: 'choice'; task: Task; options: string[]; correct: number }
 export interface OpenQuestion { kind: 'open'; task: Task }
@@ -41,6 +41,12 @@ export function makeChoice(task: Task, r: Rng): ChoiceQuestion {
 
 export const TEST_SIZE = 10;
 
+/** Zadanie odtwarzalne z ziarna (do powtórek) */
+export function genTask(sk: Skill, seed: number): Task {
+  return { ...sk.generate(mulberry32(seed)), skillId: sk.id, seed };
+}
+export const newSeed = (r: Rng = Math.random) => (r() * 2 ** 31) | 0;
+
 export function buildTest(d: Dzial, r: Rng): Question[] {
   const skills = shuffle(r, d.skills);
   const qs: Question[] = [];
@@ -48,7 +54,7 @@ export function buildTest(d: Dzial, r: Rng): Question[] {
     const choice = i < 6;
     const pool = choice ? skills.filter((k) => !k.noChoice) : skills;
     const sk = pool[i % pool.length];
-    const task = { ...sk.generate(r), skillId: sk.id };
+    const task = genTask(sk, newSeed(r));
     qs.push(choice ? makeChoice(task, r) : { kind: 'open', task });
   }
   return qs;

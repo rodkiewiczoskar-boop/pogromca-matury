@@ -1,15 +1,17 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { DZIALY, PLANNED, STAGE_GOAL } from '../content/curriculum';
-import { buildTest, Question, TEST_SIZE } from '../content/testBuilder';
+import { buildTest, genTask, newSeed, Question, TEST_SIZE } from '../content/testBuilder';
 import type { Dzial, Skill, Task } from '../content/types';
 import { checkAnswer, CheckResult } from '../math/check';
 import { mulberry32 } from '../math/rng';
 import { loadCE } from '../math/evaluate';
-import { Icon, MathDisplay, MathInput, MathInputApi, MathText, Progress, Toolbar, TopBar } from './components';
+import { Icon, MathDisplay, MathInput, MathInputApi, MathText, OptionMath, Progress, Toolbar, TopBar } from './components';
 import { latexToHtml } from './mathlive';
 import { CalcButton } from './calculator';
 import { Figure, pickedFrom, pointLatex } from './Figure';
-import { dzialProgress, findSkill, isUnlocked, recordAnswer, skillProgress, testUnlocked, update, useStore } from './store';
+import { dueReviews, dzialProgress, findSkill, getState, isUnlocked, recordAnswer, recordResults, skillProgress, testUnlocked, update, useStore } from './store';
+import { FormulaButton } from './formulas';
+import { TodayCard } from './study';
 
 const seed = () => (Math.random() * 2 ** 31) | 0;
 
@@ -19,6 +21,7 @@ export function Home() {
   const total = DZIALY.reduce((a, d) => a + d.skills.length, 0);
   const done = DZIALY.reduce((a, d) => a + d.skills.filter((k) => skillProgress(s, k.id).done).length, 0);
   const next = nextStage(s);
+  const due = dueReviews(s).length;
   return (
     <div class="page">
       <TopBar />
@@ -33,6 +36,14 @@ export function Home() {
           </div>
         </section>
 
+        <TodayCard />
+        <nav class="tools-row" aria-label="Narzędzia">
+          <a href="#/powtorki">Powtórki{due ? <b>{due}</b> : null}</a>
+          <a href="#/postep">Postępy</a>
+          <a href="#/wzory">Karta wzorów</a>
+          <a href="#/otwarte">Zadania otwarte</a>
+          <a href="#/arkusze">Arkusze CKE</a>
+        </nav>
         <a class="exam-card" href="#/matura">
           <span class="exam-card-body">
             <span class="exam-card-title">Próbna matura</span>
@@ -136,46 +147,110 @@ export function Lesson({ id }: { id: string }) {
   return <LessonInner key={id} dzial={found.dzial} skill={found.skill} index={found.index} />;
 }
 
-function LessonInner({ dzial, skill, index }: { dzial: Dzial; skill: Skill; index: number }) {
-  const s = useStore();
-  const prog = skillProgress(s, skill.id);
-  const [task, setTask] = useState<Task>(() => skill.generate(mulberry32(seed())));
+/** Wynik jednego zadania w karcie */
+export interface TaskOutcome { ok: boolean; hinted: boolean }
+
+/** Karta zadania: rysunek, pole odpowiedzi, podpowiedzi krok po kroku, sprawdzanie i rozwiązanie */
+export function TaskCard({ task, tip, onResult, onNext, nextLabel = 'Dalej' }: {
+  task: Task; tip?: string[]; onResult: (o: TaskOutcome) => void; onNext: () => void; nextLabel?: string;
+}) {
   const [latex, setLatex] = useState('');
   const [res, setRes] = useState<CheckResult | null>(null);
   const [showSol, setShowSol] = useState(false);
-  const [tipOpen, setTipOpen] = useState(!s.tipsSeen[skill.id]);
-  const [celebrate, setCelebrate] = useState(false);
+  const [hints, setHints] = useState(0);
   const api = useRef<MathInputApi | null>(null);
   const nextBtn = useRef<HTMLButtonElement>(null);
-  const wasDone = useRef(prog.done);
-
   const finished = res && (res.status === 'correct' || res.status === 'wrong');
-  const kb = ['interval', 'point', 'list'].includes(task.answer.form) ? 'sets' : 'default';
+  const kb = kbFor(task.answer.form);
+  // podpowiedzi: wszystkie kroki rozwiązania oprócz ostatniego (ostatni zwykle podaje wynik)
+  const hintSteps = task.solution.length > 1 ? task.solution.slice(0, -1) : tip?.length ? [tip[0]] : [];
 
-  useEffect(() => { if (!s.tipsSeen[skill.id]) update((x) => { x.tipsSeen[skill.id] = true; }); }, []);
   useEffect(() => { if (finished) nextBtn.current?.focus(); }, [finished]);
 
   async function check() {
-    if (finished) return next();
+    if (finished) return onNext();
     await loadCE();
     const r = checkAnswer(latex, task.answer);
     setRes(r);
     if (r.status === 'correct' || r.status === 'wrong') {
-      recordAnswer(skill.id, r.status === 'correct');
+      onResult({ ok: r.status === 'correct', hinted: hints > 0 });
       if (r.status === 'wrong') setShowSol(true);
     }
   }
   function giveUp() {
-    setRes({ status: 'wrong', message: 'Zobacz rozwiązanie krok po kroku.' });
-    recordAnswer(skill.id, false);
+    setRes({ status: 'wrong', message: 'Zobacz rozwiązanie krok po kroku. To zadanie wróci w powtórkach.' });
+    onResult({ ok: false, hinted: true });
     setShowSol(true);
   }
+
+  const feedbackClass = res ? `feedback is-${res.status}` : 'feedback';
+  return (
+    <>
+      <section class="task-card">
+        <p class="task-text"><MathText text={task.text} /></p>
+        {task.display && <MathDisplay latex={task.display} />}
+        {task.figure && <Figure fig={task.figure} picked={pickedFrom(latex)} onPick={finished ? undefined : (p) => { api.current?.set(pointLatex(p)); if (res) setRes(null); }} />}
+        <Toolbar api={api} kb={kb} />
+        <MathInput apiRef={api} kb={kb} onInput={(l) => { setLatex(l); if (res && !finished) setRes(null); }} onEnter={check}
+          prefix={task.answer.prefix} suffix={task.answer.suffix} disabled={!!finished} autoFocus />
+        <p class="hint-line">{kb === 'sets' ? <>Kilka liczb oddziel średnikiem <kbd>;</kbd>. Przedział: np. <kbd>(</kbd>-∞<kbd>;</kbd>2<kbd>]</kbd>, nieskończoność: wpisz <kbd>infty</kbd>.</> : <>Możesz rozpisywać: <kbd>działanie = krok = wynik</kbd>. Sprawdzam wynik po ostatnim <kbd>=</kbd> i każdy krok. Skróty: <kbd>/</kbd> ułamek, <kbd>^</kbd> potęga, <kbd>sqrt</kbd> pierwiastek.</>}</p>
+        {kb !== 'sets' && <p class="hint-line touch-only">Możesz rozpisywać obliczenia ze znakiem „=”. Sprawdzam wynik po ostatnim „=” i wskażę krok z błędem.</p>}
+      </section>
+
+      {hints > 0 && !showSol && (
+        <section class="hints" aria-live="polite">
+          {hintSteps.slice(0, hints).map((h, i) => (
+            <p key={i} class="hint"><span class="hint-num">{i + 1}</span><MathText text={h} /></p>
+          ))}
+        </section>
+      )}
+
+      <div class={feedbackClass} aria-live="polite">
+        {res?.status === 'correct' && <><strong>Dobrze.</strong>{res.note && <span> {res.note}</span>}{hints > 0 && <span> Było z podpowiedzią, więc zadanie nie liczy się do zaliczenia etapu i wróci za kilka dni w powtórkach.</span>}</>}
+        {res?.status === 'wrong' && (
+          <>
+            <strong>Niestety nie.</strong>{res.message && <span> {res.message}</span>}
+            <span class="correct-answer">Poprawna odpowiedź: <OptionMath latex={task.answer.expected} /></span>
+          </>
+        )}
+        {(res?.status === 'form' || res?.status === 'invalid') && <span>{res.message}</span>}
+      </div>
+
+      {showSol && (
+        <section class="solution">
+          <h3>Rozwiązanie</h3>
+          <ol>{task.solution.map((l, i) => <li key={i}><MathText text={l} /></li>)}</ol>
+        </section>
+      )}
+
+      <div class="actions">
+        {!finished && (hints < hintSteps.length
+          ? <button class="btn btn-ghost" onClick={() => setHints(hints + 1)}>{hints === 0 ? 'Podpowiedź' : `Następna podpowiedź (${hints + 1}/${hintSteps.length})`}</button>
+          : <button class="btn btn-ghost" onClick={giveUp}>Pokaż rozwiązanie</button>)}
+        {finished && !showSol && <button class="btn btn-ghost" onClick={() => setShowSol(true)}>Pokaż rozwiązanie</button>}
+        <button ref={nextBtn} class="btn btn-primary grow" onClick={check} disabled={!finished && !latex.trim()}>
+          {finished ? nextLabel : 'Sprawdź'}
+        </button>
+      </div>
+    </>
+  );
+}
+
+function LessonInner({ dzial, skill, index }: { dzial: Dzial; skill: Skill; index: number }) {
+  const s = useStore();
+  const prog = skillProgress(s, skill.id);
+  const [task, setTask] = useState<Task>(() => genTask(skill, newSeed()));
+  const [n, setN] = useState(0);
+  const [tipOpen, setTipOpen] = useState(!s.tipsSeen[skill.id]);
+  const [celebrate, setCelebrate] = useState(false);
+  const wasDone = useRef(prog.done);
+
+  useEffect(() => { if (!s.tipsSeen[skill.id]) update((x) => { x.tipsSeen[skill.id] = true; }); }, []);
+
   function next() {
-    if (!wasDone.current && skillProgress(s, skill.id).done) { wasDone.current = true; setCelebrate(true); return; }
-    setTask(skill.generate(mulberry32(seed())));
-    setRes(null); setShowSol(false); setLatex('');
-    api.current?.clear();
-    setTimeout(() => api.current?.focus(), 30);
+    if (!wasDone.current && skillProgress(getState(), skill.id).done) { wasDone.current = true; setCelebrate(true); return; }
+    setTask(genTask(skill, newSeed()));
+    setN(n + 1);
   }
 
   const nextSkill = dzial.skills[index + 1];
@@ -198,10 +273,10 @@ function LessonInner({ dzial, skill, index }: { dzial: Dzial; skill: Skill; inde
     );
   }
 
-  const feedbackClass = res ? `feedback is-${res.status}` : 'feedback';
   return (
     <div class="page lesson">
       <TopBar back={`#/d/${dzial.id}`} title={skill.title}>
+        <FormulaButton dzial={dzial.id} />
         <CalcButton />
         <span class="counter">{Math.min(prog.correct, STAGE_GOAL)}/{STAGE_GOAL}</span>
       </TopBar>
@@ -213,43 +288,8 @@ function LessonInner({ dzial, skill, index }: { dzial: Dzial; skill: Skill; inde
           </button>
           {tipOpen && <div class="tip-body">{skill.tip.map((t, i) => <p key={i}><MathText text={t} /></p>)}</div>}
         </section>
-
-        <section class="task-card">
-          <p class="task-text"><MathText text={task.text} /></p>
-          {task.display && <MathDisplay latex={task.display} />}
-          {task.figure && <Figure fig={task.figure} picked={pickedFrom(latex)} onPick={finished ? undefined : (p) => { api.current?.set(pointLatex(p)); if (res) setRes(null); }} />}
-          <Toolbar api={api} kb={kb} />
-          <MathInput apiRef={api} kb={kb} onInput={(l) => { setLatex(l); if (res && !finished) setRes(null); }} onEnter={check}
-            prefix={task.answer.prefix} suffix={task.answer.suffix} disabled={!!finished} autoFocus />
-          <p class="hint-line">{kb === 'sets' ? <>Kilka liczb oddziel średnikiem <kbd>;</kbd>. Przedział: np. <kbd>(</kbd>-∞<kbd>;</kbd>2<kbd>]</kbd>, nieskończoność: wpisz <kbd>infty</kbd>.</> : <>Możesz rozpisywać: <kbd>działanie = krok = wynik</kbd>. Sprawdzam wynik po ostatnim <kbd>=</kbd> i każdy krok. Skróty: <kbd>/</kbd> ułamek, <kbd>^</kbd> potęga, <kbd>sqrt</kbd> pierwiastek.</>}</p>
-          <p class="hint-line touch-only">Możesz rozpisywać obliczenia ze znakiem „=”. Sprawdzam wynik po ostatnim „=” i wskażę krok z błędem.</p>
-        </section>
-
-        <div class={feedbackClass} aria-live="polite">
-          {res?.status === 'correct' && <><strong>Dobrze.</strong>{res.note && <span> {res.note}</span>}</>}
-          {res?.status === 'wrong' && (
-            <>
-              <strong>Niestety nie.</strong>{res.message && <span> {res.message}</span>}
-              <span class="correct-answer">Poprawna odpowiedź: <span class="m" dangerouslySetInnerHTML={{ __html: latexToHtml(task.answer.expected) }} /></span>
-            </>
-          )}
-          {(res?.status === 'form' || res?.status === 'invalid') && <span>{res.message}</span>}
-        </div>
-
-        {showSol && (
-          <section class="solution">
-            <h3>Rozwiązanie</h3>
-            <ol>{task.solution.map((l, i) => <li key={i}><MathText text={l} /></li>)}</ol>
-          </section>
-        )}
-
-        <div class="actions">
-          {!finished && <button class="btn btn-ghost" onClick={giveUp}>Nie wiem</button>}
-          {finished && !showSol && <button class="btn btn-ghost" onClick={() => setShowSol(true)}>Pokaż rozwiązanie</button>}
-          <button ref={nextBtn} class="btn btn-primary grow" onClick={check} disabled={!finished && !latex.trim()}>
-            {finished ? 'Dalej' : 'Sprawdź'}
-          </button>
-        </div>
+        <TaskCard key={n} task={task} tip={skill.tip} onNext={next}
+          onResult={({ ok, hinted }) => recordAnswer(skill.id, ok, { seed: task.seed, hinted })} />
       </main>
     </div>
   );
@@ -286,6 +326,7 @@ function TestInner({ d }: { d: Dzial }) {
   function finish() {
     const score = qs.filter((q, k) => grade(q, answers[k])?.status === 'correct').length;
     const pct = Math.round((score / qs.length) * 100);
+    recordResults(qs.map((q, k) => ({ skillId: q.task.skillId!, seed: q.task.seed, ok: grade(q, answers[k])?.status === 'correct' })));
     update((s) => {
       const prev = s.tests[d.id];
       s.tests[d.id] = { last: pct, best: Math.max(pct, prev?.best ?? 0), date: new Date().toISOString() };
@@ -349,10 +390,10 @@ function TestInner({ d }: { d: Dzial }) {
                   {q.task.display && <MathDisplay latex={q.task.display} />}
                   {q.task.figure && <Figure fig={q.task.figure} />}
                   <p class="review-line">Twoja odpowiedź: {q.kind === 'choice'
-                    ? (a?.choice !== undefined ? <><b>{'ABCD'[a.choice]}</b> <span class="m" dangerouslySetInnerHTML={{ __html: latexToHtml(q.options[a.choice]) }} /></> : 'brak')
+                    ? (a?.choice !== undefined ? <><b>{'ABCD'[a.choice]}</b> <OptionMath latex={q.options[a.choice]} /></> : 'brak')
                     : (a?.latex ? <span class="m" dangerouslySetInnerHTML={{ __html: latexToHtml(a.latex) }} /> : 'brak')}</p>
                   {!ok && g?.message && <p class="review-line muted">{g.message}</p>}
-                  {!ok && <p class="review-line">Poprawnie: {q.kind === 'choice' && <b>{'ABCD'[q.correct]} </b>}<span class="m" dangerouslySetInnerHTML={{ __html: latexToHtml(q.task.answer.expected) }} /></p>}
+                  {!ok && <p class="review-line">Poprawnie: {q.kind === 'choice' && <b>{'ABCD'[q.correct]} </b>}<OptionMath latex={q.task.answer.expected} /></p>}
                   {!ok && <details><summary>Rozwiązanie</summary><ol>{q.task.solution.map((l, j) => <li key={j}><MathText text={l} /></li>)}</ol></details>}
                 </li>
               );
@@ -374,6 +415,7 @@ function TestInner({ d }: { d: Dzial }) {
   return (
     <div class="page lesson">
       <TopBar back={`#/d/${d.id}`} title={`Zadanie ${i + 1} z ${qs.length}`}>
+        <FormulaButton dzial={d.id} />
         <CalcButton />
         <span class="counter">{answeredCount}/{qs.length}</span>
       </TopBar>
@@ -394,7 +436,7 @@ function TestInner({ d }: { d: Dzial }) {
               {q.options.map((o, k) => (
                 <button key={k} role="radio" aria-checked={a.choice === k} class={`option${a.choice === k ? ' is-selected' : ''}`} onClick={() => setA({ choice: k })}>
                   <span class="option-letter">{'ABCD'[k]}</span>
-                  <span class="m" dangerouslySetInnerHTML={{ __html: latexToHtml(o) }} />
+                  <OptionMath latex={o} />
                 </button>
               ))}
             </div>
