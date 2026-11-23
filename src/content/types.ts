@@ -1,11 +1,14 @@
 import type { InputAnswer } from '../math/check';
 import type { Rng } from '../math/rng';
+import type { Figure } from './figures';
 
 export interface Task {
   /** Polecenie; fragmenty $...$ to wzory */
   text: string;
   /** Duży wzór pod poleceniem */
   display?: string;
+  /** Rysunek (wykres funkcji albo figura) */
+  figure?: Figure;
   answer: InputAnswer;
   /** Kolejne kroki rozwiązania ($...$ to wzory) */
   solution: string[];
@@ -23,6 +26,8 @@ export interface Task {
   verifyIneq?: '<' | '<=' | '>' | '>=';
   /** Punkt: oczekiwane współrzędne */
   verifyPoint?: number[];
+  /** Przedział: przynależność liczby do zbioru liczona niezależnie (np. próbkowaniem wykresu) */
+  verifyIn?: (x: number) => boolean;
   /** Uzupełniane w teście z działu */
   skillId?: string;
 }

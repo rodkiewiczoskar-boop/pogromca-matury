@@ -8,6 +8,7 @@ import { loadCE } from '../math/evaluate';
 import { Icon, MathDisplay, MathInput, MathInputApi, MathText, Progress, Toolbar, TopBar } from './components';
 import { latexToHtml } from './mathlive';
 import { CalcButton } from './calculator';
+import { Figure, pickedFrom, pointLatex } from './Figure';
 import { dzialProgress, findSkill, isUnlocked, recordAnswer, skillProgress, testUnlocked, update, useStore } from './store';
 
 const seed = () => (Math.random() * 2 ** 31) | 0;
@@ -216,10 +217,12 @@ function LessonInner({ dzial, skill, index }: { dzial: Dzial; skill: Skill; inde
         <section class="task-card">
           <p class="task-text"><MathText text={task.text} /></p>
           {task.display && <MathDisplay latex={task.display} />}
+          {task.figure && <Figure fig={task.figure} picked={pickedFrom(latex)} onPick={finished ? undefined : (p) => { api.current?.set(pointLatex(p)); if (res) setRes(null); }} />}
           <Toolbar api={api} kb={kb} />
           <MathInput apiRef={api} kb={kb} onInput={(l) => { setLatex(l); if (res && !finished) setRes(null); }} onEnter={check}
             prefix={task.answer.prefix} suffix={task.answer.suffix} disabled={!!finished} autoFocus />
-          <p class="hint-line">{kb === 'sets' ? <>Kilka liczb oddziel średnikiem <kbd>;</kbd>. Przedział: np. <kbd>(</kbd>-∞<kbd>;</kbd>2<kbd>]</kbd>, nieskończoność: wpisz <kbd>infty</kbd>.</> : <>Skróty: <kbd>/</kbd> ułamek, <kbd>^</kbd> potęga, wpisz <kbd>sqrt</kbd> dla pierwiastka. Przecinek dziesiętny: <kbd>,</kbd></>}</p>
+          <p class="hint-line">{kb === 'sets' ? <>Kilka liczb oddziel średnikiem <kbd>;</kbd>. Przedział: np. <kbd>(</kbd>-∞<kbd>;</kbd>2<kbd>]</kbd>, nieskończoność: wpisz <kbd>infty</kbd>.</> : <>Możesz rozpisywać: <kbd>działanie = krok = wynik</kbd>. Sprawdzam wynik po ostatnim <kbd>=</kbd> i każdy krok. Skróty: <kbd>/</kbd> ułamek, <kbd>^</kbd> potęga, <kbd>sqrt</kbd> pierwiastek.</>}</p>
+          <p class="hint-line touch-only">Możesz rozpisywać obliczenia ze znakiem „=”. Sprawdzam wynik po ostatnim „=” i wskażę krok z błędem.</p>
         </section>
 
         <div class={feedbackClass} aria-live="polite">
@@ -344,6 +347,7 @@ function TestInner({ d }: { d: Dzial }) {
                   <div class="review-head"><span class="badge">{ok ? <Icon name="check" /> : <Icon name="cross" />}</span>Zadanie {k + 1}</div>
                   <p><MathText text={q.task.text} /></p>
                   {q.task.display && <MathDisplay latex={q.task.display} />}
+                  {q.task.figure && <Figure fig={q.task.figure} />}
                   <p class="review-line">Twoja odpowiedź: {q.kind === 'choice'
                     ? (a?.choice !== undefined ? <><b>{'ABCD'[a.choice]}</b> <span class="m" dangerouslySetInnerHTML={{ __html: latexToHtml(q.options[a.choice]) }} /></> : 'brak')
                     : (a?.latex ? <span class="m" dangerouslySetInnerHTML={{ __html: latexToHtml(a.latex) }} /> : 'brak')}</p>
@@ -384,6 +388,7 @@ function TestInner({ d }: { d: Dzial }) {
           <p class="task-kind">{q.kind === 'choice' ? 'Zadanie zamknięte · wybierz jedną odpowiedź' : 'Zadanie otwarte · wpisz wynik'}</p>
           <p class="task-text"><MathText text={q.task.text} /></p>
           {q.task.display && <MathDisplay latex={q.task.display} />}
+          {q.task.figure && <Figure fig={q.task.figure} picked={q.kind === 'open' ? pickedFrom(a.latex) : null} onPick={q.kind === 'open' ? (p) => api.current?.set(pointLatex(p)) : undefined} />}
           {q.kind === 'choice' ? (
             <div class="options" role="radiogroup">
               {q.options.map((o, k) => (

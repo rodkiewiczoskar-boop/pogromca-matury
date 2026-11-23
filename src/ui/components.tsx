@@ -18,7 +18,11 @@ export function MathDisplay({ latex }: { latex: string }) {
   return <div class="display" dangerouslySetInnerHTML={{ __html: latexToHtml(latex, true) }} />;
 }
 
-export interface MathInputApi { focus(): void; clear(): void; insert(latex: string): void; command(c: string): void }
+export interface MathInputApi { focus(): void; clear(): void; insert(latex: string): void; command(c: string): void; set(latex: string): void }
+
+/** Zdarzenia między polem odpowiedzi a kalkulatorem */
+export const fieldEvents = new EventTarget();
+export let lastField: MathInputApi | null = null;
 
 export function MathInput({ onInput, onEnter, prefix, suffix, disabled, apiRef, autoFocus, kb = 'default', initial }: {
   kb?: KbMode;
@@ -42,7 +46,7 @@ export function MathInput({ onInput, onEnter, prefix, suffix, disabled, apiRef, 
     mf.mathVirtualKeyboardPolicy = 'auto';
     mf.setAttribute('aria-label', 'Twoja odpowiedź');
     mf.addEventListener('input', () => cb.current.onInput(mf.value));
-    mf.addEventListener('focusin', () => setupKeyboard(cb.current.kb));
+    mf.addEventListener('focusin', () => { setupKeyboard(cb.current.kb); lastField = api; fieldEvents.dispatchEvent(new Event('field-focus')); });
     if (initial) mf.value = initial;
     mf.addEventListener('keydown', (e: KeyboardEvent) => {
       if (e.key === 'Enter') { e.preventDefault(); cb.current.onEnter(); }
@@ -52,14 +56,16 @@ export function MathInput({ onInput, onEnter, prefix, suffix, disabled, apiRef, 
     host.current!.appendChild(mf);
     try { mf.menuItems = []; } catch { /* starsze wersje */ }
     mfRef.current = mf;
-    if (apiRef) apiRef.current = {
+    const api: MathInputApi = {
       focus: () => mf.focus(),
       clear: () => { mf.value = ''; cb.current.onInput(''); },
       insert: (l) => { mf.executeCommand(['insert', l, { focus: true, feedback: false, selectionMode: 'placeholder' } as any]); mf.focus(); cb.current.onInput(mf.value); },
       command: (c) => { mf.executeCommand(c as any); mf.focus(); cb.current.onInput(mf.value); },
+      set: (l) => { mf.value = l; cb.current.onInput(mf.value); },
     };
+    if (apiRef) apiRef.current = api;
     if (autoFocus && matchMedia('(pointer: fine)').matches) setTimeout(() => mf.focus(), 50);
-    return () => { mf.remove(); };
+    return () => { if (lastField === api) lastField = null; mf.remove(); };
   }, []);
 
   useEffect(() => { if (mfRef.current) mfRef.current.readOnly = !!disabled; }, [disabled]);

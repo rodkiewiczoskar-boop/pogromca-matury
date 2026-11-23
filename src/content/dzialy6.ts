@@ -1,6 +1,7 @@
 // Działy 6–10: trygonometria, planimetria, geometria analityczna, stereometria, statystyka i prawdopodobieństwo
 import { q, Q, simplifySqrt, surdTex } from '../math/latex';
 import { int, intNZ, pick } from '../math/rng';
+import { katRysunek, trojkatRysunek } from './wykresy';
 import type { Dzial, Skill } from './types';
 
 const num = (expected: string) => ({ kind: 'input' as const, expected, form: 'number' as const });
@@ -99,7 +100,7 @@ const trygWartosci: Skill = {
   },
 };
 
-export const dzial6: Dzial = { id: 'trygonometria', num: 6, title: 'Trygonometria', skills: [trygSinCos, trygWartosci] };
+export const dzial6: Dzial = { id: 'trygonometria', num: 6, title: 'Trygonometria', skills: [trygSinCos, trygWartosci, trojkatRysunek] };
 
 /* ───────── Dział 7: Planimetria ───────── */
 
@@ -190,7 +191,7 @@ const trojkaty: Skill = {
   },
 };
 
-export const dzial7: Dzial = { id: 'planimetria', num: 7, title: 'Planimetria', skills: [katy, trojkaty] };
+export const dzial7: Dzial = { id: 'planimetria', num: 7, title: 'Planimetria', skills: [katy, katRysunek, trojkaty] };
 
 /* ───────── Dział 8: Geometria analityczna ───────── */
 

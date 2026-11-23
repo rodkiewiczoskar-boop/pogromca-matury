@@ -16,6 +16,10 @@ export function verifyTask(t: Task, ctx: string) {
     if (t.verifyRoots) for (const x of roots) expect(Math.abs(ceNumeric(t.verify.expr, { x })), `${ctx} root ${x}`).toBeLessThan(1e-9);
   } else if (form === 'interval') {
     const iv = parseIntervals(t.answer.expected);
+    if (t.verifyIn) {
+      for (let k = -400; k <= 400; k++) expect(inIntervals(k / 20, iv), `${ctx} x=${k / 20}`).toBe(t.verifyIn(k / 20));
+      return;
+    }
     const rel = t.verifyIneq!;
     const ex = parseLatex(t.verify.expr);
     for (let k = -400; k <= 400; k++) {

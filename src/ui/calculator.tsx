@@ -1,6 +1,6 @@
 // Prosty kalkulator (cztery działania, pierwiastek, kwadrat, procent), jak dozwolony na maturze.
 import { useEffect, useState } from 'preact/hooks';
-import { Icon } from './components';
+import { fieldEvents, Icon, lastField } from './components';
 import { calcEval, formatCalc } from '../math/calc';
 
 const KEYS: { k: string; label?: string; cls?: string }[] = [
@@ -48,6 +48,9 @@ export function Calculator({ onClose }: { onClose: () => void }) {
         <div class="calc-expr">{expr || '0'}</div>
         {result === 'Błąd' && <div class="calc-err">Nie da się tego obliczyć</div>}
       </div>
+      {lastField && expr && /^-?[0-9]+(,[0-9]+)?$/.test(expr) && (
+        <button type="button" class="calc-insert" onPointerDown={(e) => e.preventDefault()} onClick={() => { lastField?.insert(expr.replace(',', '{,}')); onClose(); }}>Wstaw {expr} do odpowiedzi</button>
+      )}
       <div class="calc-keys">
         {KEYS.map((key) => (
           <button key={key.k} type="button" class={`calc-key ${key.cls ?? ''}`} onPointerDown={(e) => e.preventDefault()} onClick={() => press(key.k)}>{key.label ?? key.k}</button>
@@ -59,9 +62,36 @@ export function Calculator({ onClose }: { onClose: () => void }) {
 
 export function CalcButton() {
   const [open, setOpen] = useState(false);
+  // dotknięcie pola odpowiedzi zamyka kalkulator (wraca klawiatura matematyczna)
+  useEffect(() => {
+    const f = () => setOpen(false);
+    fieldEvents.addEventListener('field-focus', f);
+    return () => fieldEvents.removeEventListener('field-focus', f);
+  }, []);
+  // przy otwartym kalkulatorze przewijamy tak, żeby pole odpowiedzi było widać nad nim
+  useEffect(() => {
+    document.body.classList.toggle('calc-open', open);
+    if (!open) return;
+    const t = setTimeout(() => {
+      const calc = document.querySelector('.calc') as HTMLElement | null;
+      const mf = (document.querySelector('.task-card math-field') ?? document.querySelector('math-field')) as HTMLElement | null;
+      if (!calc || !mf) return;
+      const top = calc.getBoundingClientRect().top, b = mf.getBoundingClientRect().bottom;
+      if (b > top - 12) window.scrollBy({ top: b - top + 24, behavior: 'smooth' });
+    }, 30);
+    return () => clearTimeout(t);
+  }, [open]);
+  const toggle = () => {
+    if (!open) {
+      // najpierw chowamy klawiaturę matematyczną i zdejmujemy fokus z pola
+      window.mathVirtualKeyboard?.hide();
+      (document.activeElement as HTMLElement | null)?.blur?.();
+    }
+    setOpen(!open);
+  };
   return (
     <>
-      <button class="calc-fab" type="button" onPointerDown={(e) => e.preventDefault()} onClick={() => { window.mathVirtualKeyboard?.hide(); setOpen(!open); }} aria-expanded={open}>
+      <button class="calc-fab" type="button" onPointerDown={(e) => e.preventDefault()} onClick={toggle} aria-expanded={open}>
         <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2" /><path d="M8.5 7.5h7M8.5 12h1M12 12h0M15.5 12h0M8.5 15.5h1M12 15.5h0M15.5 15.5h0" /></svg>
         <span>Kalkulator</span>
       </button>

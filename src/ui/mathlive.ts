@@ -37,7 +37,7 @@ export function setupKeyboard(mode: KbMode = 'default') {
       rows: [
         ['7', '8', '9', { latex: '\\div', insert: ':', label: ':' }, sep, { latex: '\\frac{#@}{#?}', class: 'small' }, { latex: '\\sqrt{#0}', class: 'small' }, { latex: '\\sqrt[#?]{#0}', class: 'small' }],
         ['4', '5', '6', { latex: '\\cdot' }, sep, { latex: '#@^{2}', class: 'small' }, { latex: '#@^{#?}', class: 'small' }, { latex: '\\log_{#?}#0', label: 'log', class: 'small' }],
-        ['1', '2', '3', '-', sep, { latex: 'x' }, { latex: '(', insert: '\\left(#0\\right)' }, { label: ';', insert: ';' }],
+        ['1', '2', '3', '-', sep, { latex: 'x' }, { latex: '(', insert: '\\left(#0\\right)' }, { latex: '=', class: 'eq-key' }],
         bottom,
       ],
     },

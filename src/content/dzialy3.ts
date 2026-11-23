@@ -1,6 +1,7 @@
 // Działy 3–5: równania i nierówności, funkcje, ciągi
 import { linTex, p, polyMul, polyTex, q, Q } from '../math/latex';
 import { int, intNZ, pick } from '../math/rng';
+import { wykresFunkcji, parabolaWykres } from './wykresy';
 import type { Dzial, Skill } from './types';
 
 const num = (expected: string) => ({ kind: 'input' as const, expected, form: 'number' as const });
@@ -208,7 +209,7 @@ const fKwadr: Skill = {
   },
 };
 
-export const dzial4: Dzial = { id: 'funkcje', num: 4, title: 'Funkcja liniowa i kwadratowa', skills: [fLinM, fKwadr] };
+export const dzial4: Dzial = { id: 'funkcje', num: 4, title: 'Funkcja liniowa i kwadratowa', skills: [fLinM, fKwadr, wykresFunkcji, parabolaWykres] };
 
 /* ───────── Dział 5 ───────── */
 

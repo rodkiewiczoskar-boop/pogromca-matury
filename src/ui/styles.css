@@ -402,3 +402,40 @@ body {
 .calc-key:active { background: var(--marker); }
 .calc-key.op, .calc-key.fn { background: var(--line); }
 .calc-key.eq { background: var(--btn); color: var(--btn-ink); grid-column: span 2; font-weight: 600; }
+.calc-insert { width: 100%; margin-bottom: 8px; height: 40px; border-radius: 8px; border: 2px solid var(--ink); background: var(--marker); color: var(--marker-ink); font-weight: 600; cursor: pointer; }
+.touch-only { display: none; }
+@media (pointer: coarse) { .touch-only { display: block; } }
+.hint-line.hint-any { display: block; }
+
+/* ───── Rysunki do zadań ───── */
+.figure { margin: 4px 0 16px; }
+.figure svg { display: block; width: 100%; max-width: 420px; height: auto; margin: 0 auto; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; overflow: visible; }
+.figure.is-pick svg { cursor: crosshair; touch-action: manipulation; }
+.figure-hint { margin: 8px 0 0; text-align: center; font-size: 13px; color: var(--muted); }
+.g-grid { stroke: var(--line); stroke-width: 1; }
+.g-axis { stroke: var(--ink-2); stroke-width: 1.4; }
+.g-arrow { fill: var(--ink-2); }
+.g-name { fill: var(--ink-2); font: italic 14px var(--font); }
+.g-tick { fill: var(--muted); font: 11px var(--font); }
+.g-curve { fill: none; stroke: var(--ink); stroke-width: 2.4; stroke-linejoin: round; stroke-linecap: round; }
+.g-dot { fill: var(--ink); }
+.g-hole { fill: var(--surface); stroke: var(--ink); stroke-width: 2; }
+.g-label { fill: var(--ink); font: italic 14px var(--font); paint-order: stroke; stroke: var(--surface); stroke-width: 4px; }
+.g-pick { fill: var(--marker); fill-opacity: 0.55; stroke: var(--marker-ink); stroke-width: 1.5; }
+.g-pick-dot { fill: var(--marker-ink); }
+.geo-line { fill: none; stroke: var(--ink); stroke-width: 2; stroke-linejoin: round; }
+.geo-line.dash { stroke-dasharray: 5 5; stroke-width: 1.4; }
+.geo-dot { fill: var(--ink); }
+.geo-label { fill: var(--ink); font: italic 600 16px var(--font); }
+.geo-text { fill: var(--ink-2); font: 15px var(--font); paint-order: stroke; stroke: var(--surface); stroke-width: 4px; }
+.geo-angle { fill: none; stroke: var(--ink-2); stroke-width: 1.5; }
+.geo-alabel { fill: var(--ink); font: 13px var(--font); paint-order: stroke; stroke: var(--surface); stroke-width: 3px; }
+@media (max-width: 520px) {
+  .calc { padding: 8px 10px calc(8px + env(safe-area-inset-bottom)); }
+  .calc-head { margin-bottom: 4px; }
+  .calc-screen { min-height: 44px; padding: 6px 10px; margin-bottom: 6px; }
+  .calc-expr { font-size: 22px; }
+  .calc-keys { gap: 5px; }
+  .calc-key { height: 40px; font-size: 18px; }
+}
+body.calc-open .page { padding-bottom: 420px; }

@@ -200,7 +200,54 @@ function checkSet(studentLatex: string, ans: InputAnswer): CheckResult {
   }
 }
 
+/** Dzieli zapis na części oddzielone znakiem "=" (poza nawiasami klamrowymi). */
+export function splitChain(latex: string): string[] {
+  const out: string[] = [];
+  let depth = 0, cur = '';
+  for (let i = 0; i < latex.length; i++) {
+    const c = latex[i];
+    if (c === '{') depth++;
+    if (c === '}') depth--;
+    if (c === '=' && depth === 0 && latex[i - 1] !== '\\') { out.push(cur); cur = ''; continue; }
+    cur += c;
+  }
+  out.push(cur);
+  return out.map((x) => x.trim());
+}
+
+const isBareSymbol = (seg: string) => /^[a-zA-Z](_\{?\w+\}?)?$/.test(seg.trim());
+
+/** Sprawdza odpowiedź. Można rozpisać obliczenia: wynikiem jest część po ostatnim "=", a kroki muszą być sobie równe. */
 export function checkAnswer(studentLatex: string, ans: InputAnswer): CheckResult {
+  if (ans.form === 'list') return checkSet(studentLatex, ans);
+  const segs = splitChain(studentLatex);
+  if (segs.length > 1) {
+    const last = segs[segs.length - 1];
+    if (!last) return { status: 'invalid', message: 'Dokończ obliczenia: po ostatnim znaku „=” wpisz wynik.' };
+    const steps = segs.filter((x) => x && !isBareSymbol(x));
+    const res = checkSingle(last, ans);
+    if (steps.length > 1 && !['interval', 'point'].includes(ans.form)) {
+      const bad = firstBrokenStep(steps, ans.vars);
+      if (bad !== null) {
+        const where = `Krok ${bad + 1} nie jest równy poprzedniemu: $${steps[bad - 1]} \\ne ${steps[bad]}$.`;
+        if (res.status === 'correct') return { ...res, note: `Wynik dobry, ale w rozpisaniu jest błąd. ${where}` };
+        if (res.status === 'wrong') return { ...res, message: `${where} Od tego miejsca rachunek się rozjeżdża.` };
+      }
+    }
+    return res;
+  }
+  return checkSingle(studentLatex, ans);
+}
+
+function firstBrokenStep(steps: string[], vars?: string[]): number | null {
+  try {
+    const parsed = steps.map((x) => parseLatex(x));
+    for (let i = 1; i < parsed.length; i++) if (!equivalent(parsed[i - 1], parsed[i], vars)) return i;
+  } catch { return null; }
+  return null;
+}
+
+function checkSingle(studentLatex: string, ans: InputAnswer): CheckResult {
   if (ans.form === 'list' || ans.form === 'interval' || ans.form === 'point') return checkSet(studentLatex, ans);
   let s: Json, e: Json;
   try {

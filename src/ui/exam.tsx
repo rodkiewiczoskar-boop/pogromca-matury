@@ -9,6 +9,7 @@ import { Icon, MathDisplay, MathInput, MathInputApi, MathText, TopBar, Toolbar }
 import { latexToHtml } from './mathlive';
 import { update, useStore } from './store';
 import { kbFor } from './views';
+import { Figure } from './Figure';
 
 interface ExamAnswers { choice: Record<number, number>; parts: Record<number, string[]>; self: Record<number, number> }
 interface ExamState { seed: number; start: number; finishedAt?: number; answers: ExamAnswers; saved?: boolean }
@@ -113,6 +114,7 @@ function ExamSession({ st, set }: { st: ExamState; set: (s: ExamState | null) =>
             <>
               <p class="task-text"><MathText text={it.q.task.text} /></p>
               {it.q.task.display && <MathDisplay latex={it.q.task.display} />}
+              {it.q.task.figure && <Figure fig={it.q.task.figure} />}
               <div class="options" role="radiogroup">
                 {it.q.options.map((o, k) => (
                   <button key={k} role="radio" aria-checked={st.answers.choice[it.num] === k} class={`option${st.answers.choice[it.num] === k ? ' is-selected' : ''}`} onClick={() => patch((a) => { a.choice[it.num] = k; })}>
@@ -164,7 +166,7 @@ function OpenInputs({ task, values, onChange, onEnter, api }: { task: OpenTask; 
                 onInput={(l) => onChange(k, l)} onEnter={onEnter} autoFocus={k === 0} />
             </div>
           ))}
-          <p class="hint-line">Wpisz wynik końcowy. Pełne rozwiązanie zrób na kartce: przy ocenie porównasz je z kluczem.</p>
+          <p class="hint-line hint-any">Możesz rozpisać obliczenia ze znakiem „=”. Liczy się wynik po ostatnim „=”. Przy ocenie porównasz rozwiązanie z kluczem.</p>
         </>
       )}
     </>
@@ -218,11 +220,12 @@ function ExamResult({ items, st, set }: { items: ExamItem[]; st: ExamState; set:
                   Zadanie {it.num}<span class="pts">{pts[k]}/{it.points} pkt</span>
                 </div>
                 {it.kind === 'closed' && full ? (
-                  <details class="closed-ok"><summary>Pokaż zadanie</summary><p><MathText text={it.q.task.text} /></p>{it.q.task.display && <MathDisplay latex={it.q.task.display} />}<p class="review-line">Odpowiedź <b>{'ABCD'[it.q.correct]}</b> <span class="m" dangerouslySetInnerHTML={{ __html: latexToHtml(it.q.task.answer.expected) }} /></p></details>
+                  <details class="closed-ok"><summary>Pokaż zadanie</summary><p><MathText text={it.q.task.text} /></p>{it.q.task.display && <MathDisplay latex={it.q.task.display} />}{it.q.task.figure && <Figure fig={it.q.task.figure} />}<p class="review-line">Odpowiedź <b>{'ABCD'[it.q.correct]}</b> <span class="m" dangerouslySetInnerHTML={{ __html: latexToHtml(it.q.task.answer.expected) }} /></p></details>
                 ) : it.kind === 'closed' ? (
                   <>
                     <p><MathText text={it.q.task.text} /></p>
                     {it.q.task.display && <MathDisplay latex={it.q.task.display} />}
+                    {it.q.task.figure && <Figure fig={it.q.task.figure} />}
                     <p class="review-line">Twoja odpowiedź: {st.answers.choice[it.num] !== undefined ? <><b>{'ABCD'[st.answers.choice[it.num]]}</b> <span class="m" dangerouslySetInnerHTML={{ __html: latexToHtml(it.q.options[st.answers.choice[it.num]]) }} /></> : 'brak'}</p>
                     {!full && <p class="review-line">Poprawnie: <b>{'ABCD'[it.q.correct]}</b> <span class="m" dangerouslySetInnerHTML={{ __html: latexToHtml(it.q.task.answer.expected) }} /></p>}
                     {!full && <details><summary>Rozwiązanie</summary><ol>{it.q.task.solution.map((l, j) => <li key={j}><MathText text={l} /></li>)}</ol></details>}

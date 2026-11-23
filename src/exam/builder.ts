@@ -11,8 +11,8 @@ export const PASS_PCT = 30;
 /** 25 zadań zamkniętych po 1 pkt, w kolejności tematów jak w arkuszu */
 export const CLOSED_BLUEPRINT: string[][] = [
   ['potegi-calk', 'potegi-wym'], ['pierw-dzialania', 'pierw-wylacz'], ['logarytmy'], ['procenty'], ['wartosc-wyr', 'wzory-skr'],
-  ['nier-liniowa'], ['uklad'], ['rown-wymierne'], ['f-liniowa'], ['f-kwadratowa'], ['f-kwadratowa', 'proste'],
-  ['ciag-arytm'], ['ciag-geom'], ['ciag-wzor'], ['tryg-sin-cos'], ['tryg-wartosci'], ['katy-okrag'], ['trojkaty'],
+  ['nier-liniowa'], ['uklad'], ['rown-wymierne'], ['f-liniowa', 'wykres-funkcji'], ['f-kwadratowa', 'parabola-wykres'], ['f-kwadratowa', 'proste'],
+  ['ciag-arytm'], ['ciag-geom'], ['ciag-wzor'], ['tryg-sin-cos'], ['tryg-wartosci'], ['katy-okrag', 'kat-rysunek'], ['trojkaty', 'trojkat-rysunek'],
   ['odcinki'], ['proste', 'odcinki'], ['graniastoslupy'], ['bryly-obrotowe'], ['statystyka'], ['kombinatoryka'], ['prawdopodobienstwo'],
 ];
 
